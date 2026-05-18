@@ -5,7 +5,6 @@
  **/
 
 // 1. DYNAMIC PREFIX HELPER
-// This looks for the prefix you set at the top of main.js
 const getPrefix = () => (window.APP_CONFIG && window.APP_CONFIG.prefix) ? window.APP_CONFIG.prefix + "_" : "APP_";
 
 /**
@@ -16,6 +15,8 @@ async function initAppData() {
     const PREFIX = getPrefix();
     try {
         const response = await fetch('utilities/dataList.txt');
+        if (!response.ok) throw new Error("Could not load utilities/dataList.txt");
+        
         const text = await response.text();
         const fileNames = text.split(/\r?\n/).filter(name => name.trim() !== "");
 
@@ -28,6 +29,8 @@ async function initAppData() {
                     const data = await res.json();
                     localStorage.setItem(storageKey, JSON.stringify(data));
                     console.log(`Initialized [${PREFIX}]: ${name}`);
+                } else {
+                    console.warn(`⚠️ Failed to load raw JSON data file: data/${name}.json`);
                 }
             }
         }
@@ -45,7 +48,6 @@ async function saveLocalToDb() {
     const PREFIX = getPrefix();
     const storageData = {};
 
-    // Only gather keys that belong to THIS project
     Object.keys(localStorage).forEach(key => {
         if (key.startsWith(PREFIX)) {
             storageData[key] = localStorage.getItem(key);
@@ -59,11 +61,14 @@ async function saveLocalToDb() {
             body: JSON.stringify(storageData)
         });
 
+        if (!response.ok) throw new Error(`HTTP Error Status: ${response.status}`);
+
         const result = await response.json();
         console.log("✅ DB Save Response:", result.message);
         return result;
     } catch (err) {
         console.error("❌ Save to DB failed:", err);
+        throw err;
     }
 }
 
@@ -74,10 +79,11 @@ async function saveLocalToDb() {
 async function restoreLocalFromDb() {
     try {
         const response = await fetch('read_db.php');
+        if (!response.ok) throw new Error(`HTTP Error Status: ${response.status}`);
+        
         const dbData = await response.json();
 
         Object.entries(dbData).forEach(([key, value]) => {
-            // Ensure data is stringified for LocalStorage
             const storageValue = (typeof value === 'object') ? JSON.stringify(value) : value;
             localStorage.setItem(key, storageValue);
         });
@@ -91,7 +97,7 @@ async function restoreLocalFromDb() {
 
 /**
  * HELPER: GETTER
- * Automatically handles the prefixing so you can just use the filename
+ * Automatically handles prefixing so you can easily reference files by name
  */
 function getLocalData(key) {
     const PREFIX = getPrefix();
@@ -99,11 +105,11 @@ function getLocalData(key) {
     try {
         return data ? JSON.parse(data) : null;
     } catch (e) {
-        return data; // Return as-is if simple string
+        return data;
     }
 }
 
-// Global Exports for non-module usage
+// Global Exports
 window.initAppData = initAppData;
 window.saveLocalToDb = saveLocalToDb;
 window.restoreLocalFromDb = restoreLocalFromDb;
